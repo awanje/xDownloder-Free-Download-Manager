@@ -1,0 +1,99 @@
+name: Release
+
+# Push a tag like v1.0.0 to build the Windows installer, the portable zip, the
+# browser extension zip and the Android APK, and attach them to a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Work out version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-dev"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer and portable zip
+        shell: pwsh
+        run: ./build_windows.ps1 -Version ${{ steps.ver.outputs.version }}
+
+      - name: Zip the browser extension
+        shell: pwsh
+        run: Compress-Archive -Path extension\* -DestinationPath dist\X-Downloader-Extension-${{ steps.ver.outputs.version }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            dist/X-Downloader-Setup-*.exe
+            dist/X-Downloader-*-windows-portable.zip
+            dist/X-Downloader-Extension-*.zip
+
+  android:
+    runs-on: ubuntu-latest
+    # A failed APK build shouldn't block the desktop release.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.5"
+          channel: stable
+          cache: true
+
+      - name: Build APK
+        working-directory: mobile_app
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: Name the APK
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-dev"; fi
+          mkdir -p out
+          cp mobile_app/build/app/outputs/flutter-apk/app-release.apk "out/X-Downloader-$v-android.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: out/*.apk
+
+  release:
+    needs: [windows, android]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') && !cancelled() && needs.windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

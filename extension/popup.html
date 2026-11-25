@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>X Downloader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <img src="icons/icon32.png" alt="">
+    <span>X Downloader</span>
+  </div>
+  <div id="status" class="status status-checking">Checking connection…</div>
+
+  <label class="capture-toggle">
+    <input type="checkbox" id="capture-toggle" checked>
+    <span>Capture browser downloads</span>
+  </label>
+
+  <div class="section-title">Media detected on this page</div>
+  <div id="media-list" class="media-list">
+    <div class="media-empty">Scanning…</div>
+  </div>
+
+  <p class="hint">
+    Or right-click any link, image, or video and choose
+    <strong>"Download with X Downloader"</strong>.
+  </p>
+</body>
+<script src="popup.js"></script>
+</html>
